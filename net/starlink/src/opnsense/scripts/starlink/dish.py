@@ -223,12 +223,17 @@ def _angle_diff(a, b):
     return (a - b + 180) % 360 - 180
 
 
+def _compass(az):
+    """Azimuth as a compass bearing 0..360 (the dish can report negative angles such as -173.9)."""
+    return None if az is None else az % 360
+
+
 def alignment_info(st):
     """Current vs desired dish pointing. The quality bands are this plugin's own heuristic, not SpaceX's."""
     align = st.get('alignment_stats') or {}
-    az = align.get('boresight_azimuth_deg', st.get('boresight_azimuth_deg'))
+    az = _compass(align.get('boresight_azimuth_deg', st.get('boresight_azimuth_deg')))
     el = align.get('boresight_elevation_deg', st.get('boresight_elevation_deg'))
-    d_az = align.get('desired_boresight_azimuth_deg')
+    d_az = _compass(align.get('desired_boresight_azimuth_deg'))
     d_el = align.get('desired_boresight_elevation_deg')
     if d_az is None or d_el is None or (d_az == 0 and d_el == 0):
         d_az = d_el = None   # the dish did not report a target (zero is the unset default)
@@ -353,7 +358,7 @@ def cmd_status(cfg, dish, _args):
         'stow_requested': bool(st.get('stow_requested')),
         'has_actuators': st.get('has_actuators') or align.get('has_actuators'),
         'tilt_angle_deg': _r(align.get('tilt_angle_deg')),
-        'azimuth_deg': _r(align.get('boresight_azimuth_deg', st.get('boresight_azimuth_deg'))),
+        'azimuth_deg': _r(_compass(align.get('boresight_azimuth_deg', st.get('boresight_azimuth_deg')))),
         'elevation_deg': _r(align.get('boresight_elevation_deg', st.get('boresight_elevation_deg'))),
         'software_update_state': st.get('software_update_state'),
         'update': update_info(st),

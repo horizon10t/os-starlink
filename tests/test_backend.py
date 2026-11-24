@@ -109,6 +109,13 @@ class Alignment(unittest.TestCase):
         self.assertEqual(a['azimuth_error_deg'], -2.0)
         self.assertEqual(a['quality'], 'good')
 
+    def test_negative_azimuth_is_shown_as_compass_bearing(self):
+        a = dish.alignment_info(self._st(-173.9, 68.7, 180.0, 65.1))
+        self.assertEqual(a['azimuth_deg'], 186.1)
+        self.assertEqual(a['desired_azimuth_deg'], 180.0)
+        self.assertEqual(a['azimuth_error_deg'], 6.1)   # unchanged by the display fix: still wraps correctly
+        self.assertEqual(a['quality'], 'poor')
+
     def test_quality_bands(self):
         self.assertEqual(dish.alignment_info(self._st(100, 60, 100, 63))['quality'], 'fair')
         self.assertEqual(dish.alignment_info(self._st(100, 60, 110, 60))['quality'], 'poor')
