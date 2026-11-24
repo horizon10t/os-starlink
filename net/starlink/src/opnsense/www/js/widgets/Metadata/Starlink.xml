@@ -21,4 +21,56 @@
             <unreachable>Dish unreachable</unreachable>
         </translations>
     </starlink>
+    <starlinkperformance>
+        <filename>StarlinkPerformance.js</filename>
+        <endpoints>
+            <endpoint>/api/starlink/dish/status</endpoint>
+            <endpoint>/api/starlink/dish/history</endpoint>
+        </endpoints>
+        <translations>
+            <title>Starlink performance</title>
+            <latency>Latency</latency>
+            <download>Download</download>
+            <upload>Upload</upload>
+            <loss>packet loss</loss>
+            <last15>last 15 minutes</last15>
+            <unreachable>Dish unreachable</unreachable>
+        </translations>
+    </starlinkperformance>
+    <starlinkobstruction>
+        <filename>StarlinkObstruction.js</filename>
+        <endpoints>
+            <endpoint>/api/starlink/dish/status</endpoint>
+            <endpoint>/api/starlink/dish/obstruction</endpoint>
+        </endpoints>
+        <translations>
+            <title>Starlink obstruction map</title>
+            <obstructed>Obstructed</obstructed>
+            <now>obstructed now</now>
+            <clear>clear now</clear>
+            <details>Open full map</details>
+            <unreachable>Dish unreachable</unreachable>
+        </translations>
+    </starlinkobstruction>
+    <starlinkdish>
+        <filename>StarlinkDish.js</filename>
+        <endpoints>
+            <endpoint>/api/starlink/dish/status</endpoint>
+        </endpoints>
+        <translations>
+            <title>Starlink dish</title>
+            <state>State</state>
+            <model>Model</model>
+            <software>Software</software>
+            <update>Update</update>
+            <uptime>Uptime</uptime>
+            <gps>GPS</gps>
+            <pointing>Pointing (az / el)</pointing>
+            <ethernet>Ethernet</ethernet>
+            <sats>satellites</sats>
+            <nofix>no fix</nofix>
+            <disabled>Disabled</disabled>
+            <unreachable>Dish unreachable</unreachable>
+        </translations>
+    </starlinkdish>
 </metadata>

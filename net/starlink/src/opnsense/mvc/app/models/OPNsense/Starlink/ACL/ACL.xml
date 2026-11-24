@@ -2,6 +2,7 @@
     <page-services-starlink>
         <name>Services: Starlink</name>
         <patterns>
+            <pattern>ui/starlink</pattern>
             <pattern>ui/starlink/*</pattern>
             <pattern>api/starlink/*</pattern>
         </patterns>

@@ -74,5 +74,30 @@ class Helpers(unittest.TestCase):
             dish.local_window_to_utc('24:00', '01:00')
 
 
+class Models(unittest.TestCase):
+    def test_auto_detects_from_hardware_version(self):
+        m = dish.resolve_model({'model': 'auto'}, 'rev4_prod2')
+        self.assertEqual((m['key'], m['detected']), ('gen3', 'gen3'))
+        self.assertNotIn('stow', m['features'])
+        self.assertEqual(dish.resolve_model({'model': 'auto'}, 'mini1_prod2')['key'], 'mini')
+
+    def test_unknown_hardware_shows_everything(self):
+        m = dish.resolve_model({'model': 'auto'}, 'something_new')
+        self.assertEqual(m['key'], 'all')
+        self.assertEqual(set(m['features']), set(dish.FEATURES))
+
+    def test_dish_actuator_flag_overrides_in_auto_mode(self):
+        self.assertIn('stow', dish.resolve_model({'model': 'auto'}, 'rev4_prod2', 'HAS_ACTUATORS_YES')['features'])
+        self.assertNotIn('stow', dish.resolve_model({'model': 'auto'}, 'rev2_proto3', 'HAS_ACTUATORS_NO')['features'])
+
+    def test_manual_choice_wins_and_bad_value_falls_back(self):
+        self.assertEqual(dish.resolve_model({'model': 'mini'}, 'rev2_proto3')['key'], 'mini')
+        self.assertEqual(dish.resolve_model({'model': 'bogus'}, None)['key'], 'all')
+
+    def test_every_command_feature_exists(self):
+        for feature in dish.COMMAND_FEATURE.values():
+            self.assertIn(feature, dish.FEATURES)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

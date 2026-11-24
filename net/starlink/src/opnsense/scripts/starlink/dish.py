@@ -61,7 +61,34 @@ HHMM = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 
 DEFAULTS = {
     'host': '192.168.100.1', 'port': '9200', 'web_port': '9201', 'transport': 'auto', 'timeout': '10',
-    'managed': '0', 'start': '01:00', 'end': '06:00',
+    'managed': '0', 'start': '01:00', 'end': '06:00', 'model': 'auto',
+}
+
+# Features of the dish API the plugin can use, per hardware model. "auto" picks the model from the
+# hardware version the dish reports and falls back to "all" (everything enabled) when it is unknown.
+# This table is best effort: if your model is missing a feature, choose "all" in the plugin settings.
+FEATURES = ('status', 'history', 'obstruction_map', 'sleep', 'stow', 'snow_melt', 'gps_control', 'pointing')
+MODELS = {
+    'all': {'name': 'Show everything', 'features': FEATURES},
+    'gen1': {'name': 'Standard, round (Gen 1)',
+             'features': ('status', 'history', 'obstruction_map', 'sleep', 'stow', 'snow_melt', 'gps_control', 'pointing')},
+    'gen2': {'name': 'Standard Actuated (Gen 2)',
+             'features': ('status', 'history', 'obstruction_map', 'sleep', 'stow', 'snow_melt', 'gps_control', 'pointing')},
+    'gen3': {'name': 'Standard (Gen 3)',
+             'features': ('status', 'history', 'obstruction_map', 'sleep', 'snow_melt', 'gps_control', 'pointing')},
+    'hp': {'name': 'Performance / High Performance',
+           'features': ('status', 'history', 'obstruction_map', 'sleep', 'snow_melt', 'gps_control', 'pointing')},
+    'mini': {'name': 'Mini',
+             'features': ('status', 'history', 'obstruction_map', 'sleep', 'gps_control', 'pointing')},
+}
+# hardware_version prefix reported by the dish -> model key (checked in order)
+HARDWARE_PREFIXES = (('rev1_', 'gen1'), ('rev2_', 'gen2'), ('rev3_', 'gen3'), ('rev4_', 'gen3'),
+                     ('hp', 'hp'), ('mini', 'mini'))
+# command -> feature it needs
+COMMAND_FEATURE = {
+    'history': 'history', 'obstruction': 'obstruction_map',
+    'sleep': 'sleep', 'wake': 'sleep', 'resume': 'sleep', 'resync': 'sleep',
+    'stow': 'stow', 'unstow': 'stow', 'snowmelt': 'snow_melt', 'gps': 'gps_control',
 }
 
 
@@ -90,6 +117,29 @@ def load_config():
 
 def make_dish(cfg):
     return Dish(cfg['host'], cfg['port'], cfg['web_port'], cfg['transport'], cfg['timeout'])
+
+
+def resolve_model(cfg, hardware_version=None, has_actuators=None):
+    """Work out the model and the usable features from the setting and what the dish reports."""
+    chosen = cfg.get('model', 'auto')
+    if chosen != 'auto' and chosen not in MODELS:
+        chosen = 'auto'
+    detected = None
+    hw = (hardware_version or '').lower()
+    for prefix, key in HARDWARE_PREFIXES:
+        if hw.startswith(prefix):
+            detected = key
+            break
+    key = chosen if chosen != 'auto' else (detected or 'all')
+    features = set(MODELS[key]['features'])
+    if chosen == 'auto':
+        # the dish itself says whether it has motors
+        if has_actuators == 'HAS_ACTUATORS_NO':
+            features.discard('stow')
+        elif has_actuators == 'HAS_ACTUATORS_YES':
+            features.add('stow')
+    return {'selected': chosen, 'detected': detected, 'key': key, 'name': MODELS[key]['name'],
+            'features': sorted(features), 'known_models': {k: v['name'] for k, v in MODELS.items()}}
 
 
 def load_state():
@@ -223,6 +273,8 @@ def cmd_status(cfg, dish, _args):
         'managed_schedule': {'enabled': cfg['managed'], 'start': cfg['start'], 'end': cfg['end']},
         'wake_hold': hold_info(),
         'transport': dish.used_transport,
+        'model': resolve_model(cfg, dev.get('hardware_version'),
+                               st.get('has_actuators') or align.get('has_actuators')),
     }
 
 
@@ -440,12 +492,19 @@ def main(argv):
         return 1
     cfg = load_config()
     try:
+        feature = COMMAND_FEATURE.get(argv[0])
+        selected = cfg.get('model', 'auto')
+        # only enforce when a model was chosen explicitly; in auto mode the dish decides
+        if feature and selected in MODELS and feature not in MODELS[selected]['features']:
+            raise DishError('%s is not supported on the selected model (%s)' % (argv[0], MODELS[selected]['name']))
         result = COMMANDS[argv[0]](cfg, make_dish(cfg), argv[1:])
         result = dict(result, ok=True)
     except (DishError, ValueError) as exc:
         result = {'ok': False, 'error': str(exc)}
     print(json.dumps(result))
-    return 0 if result['ok'] else 2
+    # Always exit 0: configd discards stdout when a script exits non-zero, and the
+    # UI needs the JSON error message. Success or failure is in the "ok" field.
+    return 0
 
 
 if __name__ == '__main__':

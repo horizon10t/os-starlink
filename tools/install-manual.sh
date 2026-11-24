@@ -19,7 +19,7 @@ sort -u /tmp/starlink_installed.$$ > /usr/local/opnsense/scripts/starlink/.insta
 rm -f /tmp/starlink_installed.$$
 
 echo ">> reloading menu/ACL caches, configd and cron"
-rm -f /tmp/opnsense_menu_cache.xml /tmp/opnsense_acl_cache.json
+rm -f /tmp/opnsense_menu_cache.xml /tmp/opnsense_acl_cache.json /var/lib/php/tmp/opnsense_menu_cache.xml /var/lib/php/tmp/opnsense_acl_cache.json
 rm -f /usr/local/opnsense/mvc/app/cache/*.php 2>/dev/null || true
 service configd restart >/dev/null
 /usr/local/sbin/configctl cron restart >/dev/null || true

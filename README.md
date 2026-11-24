@@ -19,6 +19,7 @@ An OPNsense plugin to monitor and control a SpaceX Starlink dish from the web UI
 - **Managed schedule** (optional): OPNsense owns the sleep window and re-applies it every
   5 minutes, which corrects the daylight-saving shift.
 - **Controls:** reboot, stow/unstow (dishes with motors), GPS on/off and snow melt mode.
+- **Dish model:** detected from the dish, or chosen in Settings. Controls a model does not have are hidden.
 - **History:** latency, loss, throughput and power draw for up to 12 hours, plus outages.
 - **Obstruction map** and a **dashboard widget**.
 - **No extra packages:** it talks to the dish's local gRPC API using only the Python that

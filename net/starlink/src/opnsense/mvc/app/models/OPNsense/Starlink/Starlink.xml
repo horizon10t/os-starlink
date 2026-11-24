@@ -27,6 +27,19 @@
                     <grpcweb>gRPC-Web only</grpcweb>
                 </OptionValues>
             </transport>
+            <model type="OptionField">
+                <Default>auto</Default>
+                <Required>Y</Required>
+                <OptionValues>
+                    <auto>Automatic (detect from the dish)</auto>
+                    <all>Show everything</all>
+                    <gen1>Standard, round (Gen 1)</gen1>
+                    <gen2>Standard Actuated (Gen 2)</gen2>
+                    <gen3>Standard (Gen 3)</gen3>
+                    <hp>Performance / High Performance</hp>
+                    <mini>Mini</mini>
+                </OptionValues>
+            </model>
             <timeout type="IntegerField">
                 <Default>10</Default>
                 <MinimumValue>2</MinimumValue>

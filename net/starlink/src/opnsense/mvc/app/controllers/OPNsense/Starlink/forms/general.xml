@@ -26,6 +26,12 @@
         <help>How to talk to the dish. Automatic tries gRPC first, then gRPC-Web.</help>
     </field>
     <field>
+        <id>starlink.general.model</id>
+        <label>Dish model</label>
+        <type>dropdown</type>
+        <help>Controls which features are shown. Automatic reads the model from the dish. Pick a model to hide controls it does not have, or "Show everything" if a feature is missing.</help>
+    </field>
+    <field>
         <id>starlink.general.timeout</id>
         <label>Timeout (seconds)</label>
         <type>text</type>
