@@ -11,7 +11,14 @@ rm -rf /usr/local/opnsense/scripts/starlink /usr/local/opnsense/mvc/app/views/OP
        /var/db/starlink
 rm -f /usr/local/opnsense/service/conf/actions.d/actions_starlink.conf /usr/local/etc/inc/plugins.inc.d/starlink.inc \
       /usr/local/opnsense/www/js/widgets/Starlink.js /usr/local/opnsense/www/js/widgets/Metadata/Starlink.xml
-rm -f /tmp/opnsense_menu_cache.xml /tmp/opnsense_acl_cache.json /var/lib/php/tmp/opnsense_menu_cache.xml /var/lib/php/tmp/opnsense_acl_cache.json
+clear_ui_caches() {
+    rm -f /tmp/opnsense_menu_cache.xml /tmp/opnsense_acl_cache.json \
+          /var/lib/php/tmp/opnsense_menu_cache.xml /var/lib/php/tmp/opnsense_acl_cache.json
+}
 service configd restart >/dev/null
 /usr/local/sbin/configctl cron restart >/dev/null || true
-echo "Starlink plugin removed."
+clear_ui_caches
+/usr/local/sbin/configctl webgui restart >/dev/null 2>&1 || true
+sleep 2
+clear_ui_caches
+echo "Starlink plugin removed. Log in to the web UI again to see the menu without it."

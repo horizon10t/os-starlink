@@ -69,6 +69,13 @@ configctl starlink status                         # what the UI sees
 ping 192.168.100.1                                # is the dish reachable?
 ```
 
+If **Services → Starlink** is missing after an install or update, log out and back in and press Ctrl+F5. The installer clears the web UI caches and restarts the web server for you; if it still does not show:
+
+```sh
+rm -f /tmp/opnsense_menu_cache.xml /tmp/opnsense_acl_cache.json /var/lib/php/tmp/opnsense_menu_cache.xml /var/lib/php/tmp/opnsense_acl_cache.json
+configctl webgui restart
+```
+
 When opening an issue, include the output of the first two commands, your OPNsense
 version and your dish model.
 
