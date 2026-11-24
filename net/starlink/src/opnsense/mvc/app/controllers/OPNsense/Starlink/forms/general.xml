@@ -1,0 +1,40 @@
+<form>
+    <field>
+        <id>starlink.general.host</id>
+        <label>Dish address</label>
+        <type>text</type>
+        <help>IP address of the dish. Starlink dishes always use 192.168.100.1. OPNsense needs a route to it (for example an IP alias 192.168.100.2/24 on the WAN).</help>
+    </field>
+    <field>
+        <id>starlink.general.port</id>
+        <label>gRPC port</label>
+        <type>text</type>
+        <help>Dish gRPC (HTTP/2) port, normally 9200.</help>
+    </field>
+    <field>
+        <id>starlink.general.web_port</id>
+        <label>gRPC-Web port</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Dish gRPC-Web port used as a fallback, normally 9201.</help>
+    </field>
+    <field>
+        <id>starlink.general.transport</id>
+        <label>Transport</label>
+        <type>dropdown</type>
+        <advanced>true</advanced>
+        <help>How to talk to the dish. Automatic tries gRPC first, then gRPC-Web.</help>
+    </field>
+    <field>
+        <id>starlink.general.timeout</id>
+        <label>Timeout (seconds)</label>
+        <type>text</type>
+        <advanced>true</advanced>
+    </field>
+    <field>
+        <id>starlink.general.refresh</id>
+        <label>Status refresh (seconds)</label>
+        <type>text</type>
+        <help>How often the status page refreshes. 0 disables auto refresh.</help>
+    </field>
+</form>

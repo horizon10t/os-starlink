@@ -1,0 +1,24 @@
+<metadata>
+    <starlink>
+        <filename>Starlink.js</filename>
+        <endpoints>
+            <endpoint>/api/starlink/dish/status</endpoint>
+            <endpoint>/api/starlink/dish/wake</endpoint>
+            <endpoint>/api/starlink/dish/resume</endpoint>
+        </endpoints>
+        <translations>
+            <title>Starlink</title>
+            <state>State</state>
+            <latency>Latency</latency>
+            <throughput>Down / Up</throughput>
+            <obstructed>Obstructed</obstructed>
+            <sleep>Sleep schedule</sleep>
+            <alerts>Alerts</alerts>
+            <disabled>Disabled</disabled>
+            <none>None</none>
+            <wake>Wake 2h</wake>
+            <resume>Resume schedule</resume>
+            <unreachable>Dish unreachable</unreachable>
+        </translations>
+    </starlink>
+</metadata>

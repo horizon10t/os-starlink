@@ -1,0 +1,4 @@
+# register the 5-minute sleep schedule sync job and clear UI caches
+rm -f /tmp/opnsense_menu_cache.xml /tmp/opnsense_acl_cache.json
+mkdir -p /var/db/starlink
+if [ -f /usr/local/sbin/configctl ]; then /usr/local/sbin/configctl cron restart > /dev/null || true; fi

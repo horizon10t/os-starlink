@@ -1,0 +1,20 @@
+<form>
+    <field>
+        <id>starlink.schedule.managed</id>
+        <label>Manage sleep schedule</label>
+        <type>checkbox</type>
+        <help>Let OPNsense own the dish sleep schedule. The window below is in this firewall's local time and is re-applied every 5 minutes, so daylight-saving changes are corrected automatically and changes made in the Starlink app are reverted. Use Wake on the Status tab for temporary overrides.</help>
+    </field>
+    <field>
+        <id>starlink.schedule.start</id>
+        <label>Sleep from</label>
+        <type>text</type>
+        <help>Local time, 24-hour HH:MM.</help>
+    </field>
+    <field>
+        <id>starlink.schedule.end</id>
+        <label>Wake at</label>
+        <type>text</type>
+        <help>Local time, 24-hour HH:MM. May be earlier than "Sleep from" to span midnight.</help>
+    </field>
+</form>

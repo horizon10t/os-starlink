@@ -1,0 +1,62 @@
+<model>
+    <mount>//OPNsense/starlink</mount>
+    <version>1.0.0</version>
+    <description>Starlink dish</description>
+    <items>
+        <general>
+            <host type="NetworkField">
+                <Default>192.168.100.1</Default>
+                <Required>Y</Required>
+                <NetMaskAllowed>N</NetMaskAllowed>
+                <AddressFamily>ipv4</AddressFamily>
+            </host>
+            <port type="PortField">
+                <Default>9200</Default>
+                <Required>Y</Required>
+            </port>
+            <web_port type="PortField">
+                <Default>9201</Default>
+                <Required>Y</Required>
+            </web_port>
+            <transport type="OptionField">
+                <Default>auto</Default>
+                <Required>Y</Required>
+                <OptionValues>
+                    <auto>Automatic (gRPC, then gRPC-Web)</auto>
+                    <h2c>gRPC over HTTP/2 only</h2c>
+                    <grpcweb>gRPC-Web only</grpcweb>
+                </OptionValues>
+            </transport>
+            <timeout type="IntegerField">
+                <Default>10</Default>
+                <MinimumValue>2</MinimumValue>
+                <MaximumValue>60</MaximumValue>
+                <Required>Y</Required>
+            </timeout>
+            <refresh type="IntegerField">
+                <Default>10</Default>
+                <MinimumValue>0</MinimumValue>
+                <MaximumValue>300</MaximumValue>
+                <Required>Y</Required>
+            </refresh>
+        </general>
+        <schedule>
+            <managed type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </managed>
+            <start type="TextField">
+                <Default>01:00</Default>
+                <Required>Y</Required>
+                <Mask>/^([01]\d|2[0-3]):[0-5]\d$/</Mask>
+                <ValidationMessage>Use 24-hour HH:MM, for example 01:00.</ValidationMessage>
+            </start>
+            <end type="TextField">
+                <Default>06:00</Default>
+                <Required>Y</Required>
+                <Mask>/^([01]\d|2[0-3]):[0-5]\d$/</Mask>
+                <ValidationMessage>Use 24-hour HH:MM, for example 06:00.</ValidationMessage>
+            </end>
+        </schedule>
+    </items>
+</model>

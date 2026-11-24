@@ -1,0 +1,9 @@
+<acl>
+    <page-services-starlink>
+        <name>Services: Starlink</name>
+        <patterns>
+            <pattern>ui/starlink/*</pattern>
+            <pattern>api/starlink/*</pattern>
+        </patterns>
+    </page-services-starlink>
+</acl>

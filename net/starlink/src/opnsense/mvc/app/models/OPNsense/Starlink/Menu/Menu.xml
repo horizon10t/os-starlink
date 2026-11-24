@@ -1,0 +1,5 @@
+<menu>
+    <Services>
+        <Starlink VisibleName="Starlink" url="/ui/starlink" cssClass="fa fa-satellite-dish fa-fw" />
+    </Services>
+</menu>

@@ -1,0 +1,7 @@
+Monitor and control a SpaceX Starlink dish from the OPNsense web UI using
+the dish's local gRPC API (no extra packages required).
+
+Shows live status, alerts, throughput/latency history and the obstruction
+map. Lets you wake the dish (optionally for a set time), manage the sleep
+schedule in local time with automatic daylight-saving correction, reboot,
+stow/unstow, toggle GPS and set snow melt mode.
