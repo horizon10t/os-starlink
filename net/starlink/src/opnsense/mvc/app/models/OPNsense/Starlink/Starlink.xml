@@ -46,6 +46,10 @@
                 <MaximumValue>60</MaximumValue>
                 <Required>Y</Required>
             </timeout>
+            <update_check type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </update_check>
             <refresh type="IntegerField">
                 <Default>10</Default>
                 <MinimumValue>0</MinimumValue>

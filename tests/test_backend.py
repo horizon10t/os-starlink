@@ -99,5 +99,47 @@ class Models(unittest.TestCase):
             self.assertIn(feature, dish.FEATURES)
 
 
+class Updates(unittest.TestCase):
+    def test_version_compare(self):
+        self.assertGreater(dish.parse_version('1.0'), dish.parse_version('0.9'))
+        self.assertGreater(dish.parse_version('0.10'), dish.parse_version('0.9'))
+        self.assertEqual(dish.parse_version('v1.2.3\n'), (1, 2, 3))
+        with self.assertRaises(sc.DishError):
+            dish.parse_version('not a version')
+
+    def test_dish_update_states(self):
+        self.assertTrue(dish.update_info({'software_update_state': 'REBOOT_REQUIRED'})['ready'])
+        self.assertTrue(dish.update_info({'swupdate_reboot_ready': True})['ready'])
+        busy = dish.update_info({'software_update_state': 'WRITING',
+                                 'software_update_stats': {'software_update_progress': 0.4}})
+        self.assertTrue(busy['in_progress'])
+        self.assertFalse(busy['ready'])
+        self.assertEqual(busy['progress'], 0.4)
+        idle = dish.update_info({'software_update_state': 'IDLE'})
+        self.assertFalse(idle['ready'] or idle['in_progress'])
+
+    def test_plugin_check_flags_newer_version(self):
+        orig = (dish.installed_version, dish.latest_version, dish.pkg_managed)
+        try:
+            dish.installed_version = lambda: '0.9'
+            dish.latest_version = lambda: '0.10'
+            dish.pkg_managed = lambda: False
+            out = dish.cmd_plugin_check({}, None, [])
+            self.assertTrue(out['available'])
+            dish.latest_version = lambda: '0.9'
+            self.assertFalse(dish.cmd_plugin_check({}, None, [])['available'])
+        finally:
+            dish.installed_version, dish.latest_version, dish.pkg_managed = orig
+
+    def test_package_install_is_not_self_updated(self):
+        orig = dish.pkg_managed
+        try:
+            dish.pkg_managed = lambda: True
+            with self.assertRaises(sc.DishError):
+                dish.cmd_plugin_update({}, None, [])
+        finally:
+            dish.pkg_managed = orig
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

@@ -47,8 +47,10 @@ Usage:
 import json
 import os
 import re
+import subprocess
 import sys
 import time
+import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
@@ -216,6 +218,63 @@ def _r(value, digits=1):
     return None if value is None else round(value, digits)
 
 
+def update_info(st):
+    """Dish firmware update status. The dish downloads updates itself and installs them on reboot."""
+    stats = st.get('software_update_stats') or {}
+    state = st.get('software_update_state') or stats.get('software_update_state')
+    ready = bool(st.get('swupdate_reboot_ready') or stats.get('update_requires_reboot')
+                 or state == 'REBOOT_REQUIRED')
+    busy = state in ('FETCHING', 'PRE_CHECK', 'WRITING', 'POST_CHECK')
+    return {'state': state, 'progress': _r(stats.get('software_update_progress'), 2), 'ready': ready,
+            'in_progress': busy and not ready, 'reboot_in_s': st.get('seconds_until_swupdate_reboot_possible'),
+            'scheduled_utc': stats.get('reboot_scheduled_utc_time') or None}
+
+
+# --------------------------------------------------------------------------
+# plugin self-update (only contacts GitHub when asked)
+# --------------------------------------------------------------------------
+
+PLUGIN_REPO = os.environ.get('STARLINK_PLUGIN_REPO', 'horizon10t/os-starlink')
+PLUGIN_BRANCH = os.environ.get('STARLINK_PLUGIN_BRANCH', 'main')
+RAW_BASE = 'https://raw.githubusercontent.com/%s/%s/' % (PLUGIN_REPO, PLUGIN_BRANCH)
+VERSION_PATH = 'net/starlink/src/opnsense/scripts/starlink/VERSION'
+VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
+UPDATE_LOG = '/var/log/starlink-update.log'
+
+
+def parse_version(text):
+    m = re.match(r'^\s*v?(\d+(?:\.\d+)*)', text or '')
+    if not m:
+        raise DishError('cannot read version %r' % (text or '')[:40])
+    return tuple(int(p) for p in m.group(1).split('.'))
+
+
+def installed_version():
+    try:
+        with open(VERSION_FILE) as fh:
+            return fh.read().strip() or None
+    except OSError:
+        return None
+
+
+def latest_version():
+    request = urllib.request.Request(RAW_BASE + VERSION_PATH, headers={'User-Agent': 'os-starlink'})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as resp:
+            return resp.read(200).decode('utf-8', 'replace').strip()
+    except (OSError, ValueError) as exc:
+        raise DishError('cannot check GitHub for updates: %s' % exc)
+
+
+def pkg_managed():
+    """True when installed as a package (then the firmware page does the updating)."""
+    try:
+        return subprocess.run(['/usr/sbin/pkg', 'info', '-e', 'os-starlink'], timeout=10,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def mbps(bps):
     return round((bps or 0) / 1e6, 2)
 
@@ -268,6 +327,7 @@ def cmd_status(cfg, dish, _args):
         'azimuth_deg': _r(align.get('boresight_azimuth_deg', st.get('boresight_azimuth_deg'))),
         'elevation_deg': _r(align.get('boresight_elevation_deg', st.get('boresight_elevation_deg'))),
         'software_update_state': st.get('software_update_state'),
+        'update': update_info(st),
         'snow_melt_mode': config.get('snow_melt_mode', 'AUTO') if config else None,
         'sleep': sleep_info(config),
         'managed_schedule': {'enabled': cfg['managed'], 'start': cfg['start'], 'end': cfg['end']},
@@ -477,7 +537,30 @@ def cmd_snowmelt(_cfg, dish, args):
     return {'message': 'Snow melt set to %s' % modes[args[0]]}
 
 
+def cmd_plugin_check(_cfg, _dish, _args):
+    installed = installed_version()
+    latest = latest_version()
+    available = bool(installed) and parse_version(latest) > parse_version(installed)
+    return {'installed': installed, 'latest': latest, 'available': available,
+            'pkg_managed': pkg_managed(), 'repo': PLUGIN_REPO}
+
+
+def cmd_plugin_update(cfg, dish, args):
+    if pkg_managed():
+        raise DishError('This plugin was installed as a package. Update it under System > Firmware > Plugins.')
+    info = cmd_plugin_check(cfg, dish, args)
+    if not info['available']:
+        return {'message': 'Already up to date (%s)' % info['installed'], 'started': False}
+    script = '/usr/bin/fetch -qo - %sinstall.sh | /bin/sh' % RAW_BASE
+    # run detached: the installer restarts configd, which would otherwise kill this process
+    subprocess.Popen(['/bin/sh', '-c', '%s > %s 2>&1' % (script, UPDATE_LOG)], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return {'message': 'Updating to %s. Reload this page in about a minute (log: %s).' % (info['latest'], UPDATE_LOG),
+            'started': True}
+
+
 COMMANDS = {
+    'plugin_check': cmd_plugin_check, 'plugin_update': cmd_plugin_update,
     'status': cmd_status, 'history': cmd_history, 'obstruction': cmd_obstruction, 'info': cmd_info,
     'sleep': cmd_sleep, 'wake': cmd_wake, 'resume': cmd_resume, 'resync': cmd_resync,
     'reboot': cmd_reboot, 'stow': cmd_stow, 'unstow': cmd_unstow, 'gps': cmd_gps, 'snowmelt': cmd_snowmelt,

@@ -126,6 +126,17 @@ class DishController extends ApiControllerBase
         return $this->requirePost() ?? $this->run('reboot');
     }
 
+    /* Plugin self-update: the check only contacts GitHub when called, the update needs POST. */
+    public function pluginCheckAction()
+    {
+        return $this->run('plugin-check');
+    }
+
+    public function pluginUpdateAction()
+    {
+        return $this->requirePost() ?? $this->run('plugin-update');
+    }
+
     public function stowAction()
     {
         return $this->requirePost() ?? $this->run('stow');

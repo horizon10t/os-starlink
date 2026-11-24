@@ -66,6 +66,7 @@
     .sl-kv dd { margin: 0; word-break: break-word; }
     .sl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
     .sl-row .form-control { width: auto; }
+    .sl-row select.form-control, .sl-toolbar select.form-control { min-width: 150px; padding-right: 30px; }
     .sl-actions .btn { margin: 0 6px 6px 0; }
     .sl-chip { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 10px; border-radius: 999px; font-size: 12px;
                border: 1px solid var(--sl-line); }
@@ -182,6 +183,24 @@
 
             <div>
                 <div class="sl-card">
+                    <div class="sl-card-title"><i class="fa fa-download"></i>{{ lang._('Updates') }}
+                        <span class="sl-chip sl-warn" id="sl-upd-badge" style="display:none; margin-left:8px">{{ lang._('Update available') }}</span></div>
+                    <div class="sl-card-body">
+                        <dl class="sl-kv">
+                            <dt>{{ lang._('Dish firmware') }}</dt><dd id="sl-fw-state">&ndash;</dd>
+                            <dt>{{ lang._('This plugin') }}</dt><dd id="sl-pl-state">&ndash;</dd>
+                        </dl>
+                        <div class="sl-row sl-actions">
+                            <button class="btn btn-default" id="sl-btn-check"><i class="fa fa-search fa-fw"></i> {{ lang._('Check for updates') }}</button>
+                            <button class="btn btn-warning" id="sl-btn-fw-update" style="display:none"><i class="fa fa-download fa-fw"></i> {{ lang._('Update dish now') }}</button>
+                            <button class="btn btn-primary" id="sl-btn-pl-update" style="display:none"><i class="fa fa-download fa-fw"></i> {{ lang._('Update plugin') }}</button>
+                        </div>
+                        <p class="text-muted" style="margin:10px 0 0; font-size:12px">
+                            {{ lang._('The dish downloads firmware by itself and installs it on reboot, so "Update dish now" reboots the dish. Checking the plugin contacts GitHub.') }}
+                        </p>
+                    </div>
+                </div>
+                <div class="sl-card">
                     <div class="sl-card-title"><i class="fa fa-exclamation-triangle"></i>{{ lang._('Active alerts') }}</div>
                     <div class="sl-card-body" id="sl-alerts"><span class="sl-empty">&ndash;</span></div>
                 </div>
@@ -259,6 +278,8 @@ $(function () {
         noSchedule: "{{ lang._('Disabled') }}",
         yes: "{{ lang._('Yes') }}", no: "{{ lang._('No') }}",
         none: "{{ lang._('None') }}",
+        fwUpdate: "{{ lang._('Reboot the dish now to install the downloaded firmware update? Internet over Starlink will drop for a few minutes.') }}",
+        plUpdate: "{{ lang._('Download and install the new plugin version from GitHub? This runs the repository installer as root. The plugin restarts, so reload this page afterwards.') }}",
     };
     const DASH = '–';
     let lastStatus = null;
@@ -285,6 +306,45 @@ $(function () {
         return rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1] == null || r[1] === '' ? DASH : r[1]) + '</dd>').join('');
     }
     function stateClass(state) { return state === 'CONNECTED' ? 'sl-ok' : (state === 'SLEEPING' ? 'sl-info' : 'sl-bad'); }
+
+    // --------------------------------------------------------------- updates
+    let fwReady = false, pluginInfo = null, autoChecked = false;
+    function refreshBadge() {
+        $('#sl-upd-badge').toggle(fwReady || !!(pluginInfo && pluginInfo.available));
+    }
+    function renderFirmware(u) {
+        fwReady = !!u.ready;
+        let text;
+        if (u.ready) { text = 'Update ready – installs when the dish reboots'; }
+        else if (u.in_progress) { text = 'Downloading / installing' + (u.progress != null ? ' (' + Math.round(u.progress * 100) + '%)' : '') + '…'; }
+        else if (u.state === 'FAULTED') { text = 'Last update failed'; }
+        else if (u.state === 'DISABLED') { text = 'Updates are disabled on the dish'; }
+        else { text = 'Up to date' + (u.state ? ' (' + u.state.toLowerCase().replace(/_/g, ' ') + ')' : ''); }
+        $('#sl-fw-state').text(text);
+        $('#sl-btn-fw-update').toggle(fwReady);
+        refreshBadge();
+    }
+    function renderPlugin(p) {
+        pluginInfo = p;
+        if (!p) { return; }
+        let text;
+        if (!p.installed) { text = 'Version unknown (latest ' + p.latest + ')'; }
+        else if (p.available) { text = 'v' + p.installed + ' → v' + p.latest + ' available' + (p.pkg_managed ? ' (update under System → Firmware)' : ''); }
+        else { text = 'v' + p.installed + ' (up to date)'; }
+        $('#sl-pl-state').text(text);
+        $('#sl-btn-pl-update').toggle(!!p.available && !p.pkg_managed);
+        refreshBadge();
+    }
+    function checkPlugin() {
+        $('#sl-pl-state').text('checking…');
+        ajaxGet('/api/starlink/dish/pluginCheck', {}, function (data) {
+            if (data && data.ok) { renderPlugin(data); }
+            else { $('#sl-pl-state').text((data && data.error) || 'check failed'); }
+        });
+    }
+    $('#sl-btn-check').click(function () { loadStatus(); checkPlugin(); });
+    $('#sl-btn-fw-update').click(function () { action('/api/starlink/dish/reboot', {}, T.fwUpdate, $(this)); });
+    $('#sl-btn-pl-update').click(function () { action('/api/starlink/dish/pluginUpdate', {}, T.plUpdate, $(this)); });
 
     // ---------------------------------------------------------------- status
     function renderStatus(d) {
@@ -336,6 +396,7 @@ $(function () {
             ['Snow melt', d.snow_melt_mode],
         ];
         if (d.outage) { rows.unshift(['Outage cause', d.outage.cause]); }
+        renderFirmware(d.update || {});
         $('#sl-details').html(kv(rows));
         $('#sl-alerts').html(d.alerts.length
             ? d.alerts.map(a => '<span class="sl-chip ' + (a === 'is_heating' || a === 'is_power_save_idle' ? 'sl-info' : 'sl-warn') + '">' + esc(a.replace(/_/g, ' ')) + '</span>').join('')
@@ -494,7 +555,9 @@ $(function () {
     function loadSettings() {
         return mapDataToFormUI({'frm_general': '/api/starlink/settings/get', 'frm_schedule': '/api/starlink/settings/get'}).done(function (data) {
             $('.selectpicker').selectpicker('refresh');
-            const sec = parseInt((((data.frm_general || {}).starlink || {}).general || {}).refresh, 10);
+            const general = (((data.frm_general || {}).starlink || {}).general || {});
+            if (general.update_check === '1' && !autoChecked) { autoChecked = true; checkPlugin(); }
+            const sec = parseInt(general.refresh, 10);
             if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
             if (sec > 0) {
                 refreshTimer = setInterval(function () { if ($('#tab-status').hasClass('active') && !document.hidden) { loadStatus(); } }, sec * 1000);

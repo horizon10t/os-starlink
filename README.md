@@ -19,6 +19,7 @@ An OPNsense plugin to monitor and control a SpaceX Starlink dish from the web UI
 - **Managed schedule** (optional): OPNsense owns the sleep window and re-applies it every
   5 minutes, which corrects the daylight-saving shift.
 - **Controls:** reboot, stow/unstow (dishes with motors), GPS on/off and snow melt mode.
+- **Updates:** shows when the dish has a firmware update ready (Update now reboots it to install) and, on request, whether a newer plugin version is on GitHub.
 - **Dish model:** detected from the dish, or chosen in Settings. Controls a model does not have are hidden.
 - **History:** latency, loss, throughput and power draw for up to 12 hours, plus outages.
 - **Obstruction map** and a **dashboard widget**.
@@ -105,7 +106,7 @@ tools/install-manual.sh  copy-install without packages (development)
 
 ### Releasing
 
-1. Bump `PLUGIN_VERSION` in `net/starlink/Makefile`, for example `1.0`, and commit.
+1. Bump `PLUGIN_VERSION` in `net/starlink/Makefile` and put the same number in `net/starlink/src/opnsense/scripts/starlink/VERSION` (the in-app update check reads it; CI fails if they differ), for example `1.0`, and commit.
 2. Tag and push:
    ```sh
    git tag v1.0 && git push origin main v1.0

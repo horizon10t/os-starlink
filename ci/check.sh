@@ -22,6 +22,9 @@ REV=$(awk '/^PLUGIN_REVISION=/{print $2}' $P/Makefile)
 case "${GITHUB_REF:-}" in
     refs/tags/v*) [ "${GITHUB_REF#refs/tags/v}" = "$VER" ] || { echo "tag ${GITHUB_REF#refs/tags/} != plugin version $VER"; exit 1; } ;;
 esac
+echo ">>> VERSION file matches Makefile (used by the in-app update check)"
+BASEVER=$(awk '/^PLUGIN_VERSION=/{print $2}' $P/Makefile)
+[ "$(tr -d '[:space:]' < $P/src/opnsense/scripts/starlink/VERSION)" = "$BASEVER" ] || { echo "VERSION file != Makefile PLUGIN_VERSION $BASEVER"; exit 1; }
 echo ">>> unit tests"
 python3 tests/test_backend.py
 find . -name __pycache__ -prune -exec rm -rf {} +
