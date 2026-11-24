@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP and Node
+        run: sudo apt-get update && sudo apt-get install -y php-cli nodejs
+      - run: sh ci/check.sh
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build package in FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.2"
+          usesh: true
+          envs: "REPO_SIGNING_KEY_B64 PLUGIN_HASH"
+          prepare: pkg install -y bash
+          run: sh ci/build-freebsd.sh
+        env:
+          REPO_SIGNING_KEY_B64: ${{ secrets.REPO_SIGNING_KEY_B64 }}
+          PLUGIN_HASH: ${{ github.sha }}
+      - name: Build site
+        env:
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: sh ci/make-site.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: os-starlink-site
+          path: site
+      - uses: actions/upload-pages-artifact@v3
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
