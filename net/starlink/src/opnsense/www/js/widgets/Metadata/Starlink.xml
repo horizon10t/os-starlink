@@ -66,6 +66,10 @@
             <uptime>Uptime</uptime>
             <gps>GPS</gps>
             <pointing>Pointing (az / el)</pointing>
+            <alignment>Alignment error</alignment>
+            <good>Good</good>
+            <fair>Fair</fair>
+            <poor>Poor</poor>
             <ethernet>Ethernet</ethernet>
             <sats>satellites</sats>
             <nofix>no fix</nofix>

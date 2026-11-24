@@ -89,7 +89,17 @@
     .sl-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
 
     /* obstruction */
-    #sl-obsmap { width: 100%; max-width: 480px; image-rendering: pixelated; border: 1px solid var(--sl-line); border-radius: 50%; background: rgba(128,128,128,.08); }
+    .sl-obs-wrap { position: relative; max-width: 480px; }
+    #sl-obsmap { display: block; width: 100%; }
+    .sl-note { font-size: 12px; opacity: .65; margin: 6px 0 0; }
+    .sl-bar { display: grid; grid-template-columns: 28px 1fr 52px; align-items: center; gap: 8px; margin: 4px 0; font-size: 12px; }
+    .sl-bar-track { height: 8px; border-radius: 4px; background: rgba(128,128,128,.18); overflow: hidden; }
+    .sl-bar-fill { height: 100%; border-radius: 4px; background: var(--sl-ok); }
+    .sl-bar-fill.sl-warn { background: var(--sl-warn); }
+    .sl-bar-fill.sl-bad { background: var(--sl-bad); }
+    .sl-align { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+    #sl-dial { width: 150px; height: 150px; flex: 0 0 auto; }
+    .sl-align dl { flex: 1 1 200px; }
     .sl-scale { height: 10px; max-width: 480px; border-radius: 5px; margin: 10px 0 2px; background: linear-gradient(90deg, rgb(255,0,40), rgb(128,100,40), rgb(0,200,40)); }
     .sl-scale-labels { display: flex; justify-content: space-between; max-width: 480px; font-size: 11px; opacity: .65; }
 
@@ -247,12 +257,31 @@
         </div>
         <div class="sl-grid">
             <div>
-                <canvas id="sl-obsmap" width="123" height="123"></canvas>
-                <div class="sl-scale"></div>
-                <div class="sl-scale-labels"><span>{{ lang._('obstructed') }}</span><span>{{ lang._('clear sky') }}</span></div>
+                <div class="sl-obs-wrap">
+                    <canvas id="sl-obsmap"></canvas>
+                    <div class="sl-tip" id="sl-obs-tip"></div>
+                    <div class="sl-scale"></div>
+                    <div class="sl-scale-labels"><span>{{ lang._('obstructed') }}</span><span>{{ lang._('clear sky') }}</span></div>
+                    <p class="sl-note" id="sl-obs-legend"></p>
+                </div>
             </div>
             <div>
-                <p>{{ lang._('Sky view as seen by the dish: the centre is straight up and the edge is the lowest elevation the dish uses. Green = clear sky observed, red = obstructed, blank = not yet observed. The map builds up over about 12 hours.') }}</p>
+                <p>{{ lang._('Sky view as seen by the dish: the centre is straight up and the edge is the lowest elevation the dish uses. Green = clear sky observed, red = obstructed, blank = not yet observed. The map builds up over about 12 hours. Hover the map for the elevation and direction of a spot.') }}</p>
+                <div class="sl-card" data-feature="pointing">
+                    <div class="sl-card-title"><i class="fa fa-crosshairs"></i>{{ lang._('Alignment') }}
+                        <span class="sl-chip" id="sl-align-chip" style="display:none; margin-left:8px"></span></div>
+                    <div class="sl-card-body">
+                        <div class="sl-align">
+                            <canvas id="sl-dial"></canvas>
+                            <dl class="sl-kv" id="sl-align-details"></dl>
+                        </div>
+                        <p class="sl-note">{{ lang._('Error = where the dish points minus where it wants to point. Within 2 degrees counts as good and within 5 as fair; those limits are a rough guide chosen by this plugin, not a SpaceX figure.') }}</p>
+                    </div>
+                </div>
+                <div class="sl-card" id="sl-sectors-card" style="display:none">
+                    <div class="sl-card-title"><i class="fa fa-compass"></i>{{ lang._('Obstruction by direction') }}</div>
+                    <div class="sl-card-body" id="sl-sectors"></div>
+                </div>
                 <div class="sl-card"><div class="sl-card-body"><dl class="sl-kv" id="sl-obs-details"></dl></div></div>
             </div>
         </div>
@@ -397,6 +426,8 @@ $(function () {
         ];
         if (d.outage) { rows.unshift(['Outage cause', d.outage.cause]); }
         renderFirmware(d.update || {});
+        renderAlignment(d.alignment);
+        drawObstruction();
         $('#sl-details').html(kv(rows));
         $('#sl-alerts').html(d.alerts.length
             ? d.alerts.map(a => '<span class="sl-chip ' + (a === 'is_heating' || a === 'is_power_save_idle' ? 'sl-info' : 'sl-warn') + '">' + esc(a.replace(/_/g, ' ')) + '</span>').join('')
@@ -528,28 +559,187 @@ $(function () {
     $(window).on('resize', renderHistory);
 
     // ---------------------------------------------------------- obstruction
+    // The map is a square grid with straight up at the centre. Distance from the centre is taken as the
+    // angle from straight up (linear), reaching theta_max at the edge of the inscribed circle. When the
+    // dish reports the Earth reference frame the top is assumed to be north with east to the right.
+    let lastObs = null;
+    const SECTORS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const DEG = '°';
+    function obsGeometry(d) {
+        const thetaMax = d.max_theta_deg || (d.min_elevation_deg ? 90 - d.min_elevation_deg : 65);
+        return {thetaMax: thetaMax, earth: d.frame === 'FRAME_EARTH'};
+    }
+    function cellAngles(d, col, row, geo) {   // theta = degrees from straight up, az = compass bearing
+        const u = (col + 0.5) / d.cols * 2 - 1, v = (row + 0.5) / d.rows * 2 - 1, r = Math.hypot(u, v);
+        let az = Math.atan2(u, -v) * 180 / Math.PI;
+        if (az < 0) { az += 360; }
+        return {r: r, theta: r * geo.thetaMax, az: az};
+    }
+    function polar(cx, cy, R, theta, az, geo) {   // screen position of a (theta, azimuth) direction
+        const rr = Math.min(theta / geo.thetaMax, 1.05) * R, a = az * Math.PI / 180;
+        return {x: cx + rr * Math.sin(a), y: cy - rr * Math.cos(a)};
+    }
+
+    function drawObstruction() {
+        const d = lastObs; if (!d) { return; }
+        const geo = obsGeometry(d);
+        const c = document.getElementById('sl-obsmap');
+        const size = Math.max(240, Math.min(c.parentNode.clientWidth || 480, 480)), dpr = window.devicePixelRatio || 1;
+        c.style.width = size + 'px'; c.style.height = size + 'px';
+        c.width = size * dpr; c.height = size * dpr;
+        const g = c.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, size, size);
+        const fg = getComputedStyle(document.body).color || '#888';
+        const cx = size / 2, cy = size / 2, R = size / 2 - 22;
+
+        // the map itself, nearest-neighbour scaled and clipped to a circle
+        const off = document.createElement('canvas'); off.width = d.cols; off.height = d.rows;
+        const og = off.getContext('2d'), img = og.createImageData(d.cols, d.rows);
+        d.snr.forEach((v, i) => {
+            const p = i * 4;
+            if (v < 0) { img.data[p + 3] = 0; return; }
+            img.data[p] = Math.round(255 * (1 - v)); img.data[p + 1] = Math.round(200 * v); img.data[p + 2] = 40; img.data[p + 3] = 255;
+        });
+        og.putImageData(img, 0, 0);
+        g.save(); g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
+        g.fillStyle = 'rgba(128,128,128,.10)'; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+        g.imageSmoothingEnabled = false; g.drawImage(off, cx - R, cy - R, 2 * R, 2 * R);
+        g.restore();
+
+        // rings at fixed elevations, spokes and compass letters
+        g.strokeStyle = 'rgba(128,128,128,.55)'; g.fillStyle = fg; g.lineWidth = 1; g.font = '10px sans-serif';
+        [60, 30].forEach(el => {
+            const theta = 90 - el; if (theta >= geo.thetaMax) { return; }
+            const rr = theta / geo.thetaMax * R;
+            g.setLineDash([3, 4]); g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+            g.globalAlpha = .75; g.fillText(el + DEG, cx + 3, cy - rr - 2); g.globalAlpha = 1;
+        });
+        g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+        if (geo.earth) {
+            g.beginPath();
+            g.moveTo(cx, cy - R); g.lineTo(cx, cy + R); g.moveTo(cx - R, cy); g.lineTo(cx + R, cy);
+            g.globalAlpha = .35; g.stroke(); g.globalAlpha = 1;
+            g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+            g.fillText('N', cx, cy - R - 11); g.fillText('S', cx, cy + R + 11);
+            g.fillText('E', cx + R + 11, cy); g.fillText('W', cx - R - 11, cy);
+            g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+        }
+
+        // where the dish points now (filled) and where it wants to point (ring)
+        const al = lastStatus && lastStatus.alignment;
+        let legend = geo.earth ? '' : 'Dish-relative view (no compass directions). ';
+        if (geo.earth && al && al.azimuth_deg != null && al.elevation_deg != null) {
+            const now = polar(cx, cy, R, 90 - al.elevation_deg, al.azimuth_deg, geo);
+            let want = null;
+            if (al.desired_azimuth_deg != null && al.desired_elevation_deg != null) {
+                want = polar(cx, cy, R, 90 - al.desired_elevation_deg, al.desired_azimuth_deg, geo);
+                g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 1.5; g.setLineDash([4, 3]);
+                g.beginPath(); g.moveTo(now.x, now.y); g.lineTo(want.x, want.y); g.stroke(); g.setLineDash([]);
+                g.strokeStyle = '#2f7ed8'; g.lineWidth = 2; g.beginPath(); g.arc(want.x, want.y, 7, 0, Math.PI * 2); g.stroke();
+            }
+            g.fillStyle = '#2f7ed8'; g.strokeStyle = '#fff'; g.lineWidth = 2;
+            g.beginPath(); g.arc(now.x, now.y, 5, 0, Math.PI * 2); g.fill(); g.stroke();
+            legend += '● pointing now' + (want ? '   ○ target' : '') + '. ';
+        }
+        legend += 'Rings mark 60' + DEG + ' and 30' + DEG + ' elevation' + (geo.earth ? '; north is assumed to be at the top.' : '.');
+        $('#sl-obs-legend').text(legend);
+    }
+
+    function renderSectors(d) {
+        const geo = obsGeometry(d), $card = $('#sl-sectors-card');
+        if (!geo.earth) { $card.hide(); return; }
+        const seen = new Array(8).fill(0), bad = new Array(8).fill(0);
+        d.snr.forEach((v, i) => {
+            if (v < 0) { return; }
+            const a = cellAngles(d, i % d.cols, Math.floor(i / d.cols), geo);
+            if (a.r > 1) { return; }
+            const s = Math.floor(((a.az + 22.5) % 360) / 45);
+            seen[s]++; if (v < 0.5) { bad[s]++; }
+        });
+        $('#sl-sectors').html(SECTORS.map((name, s) => {
+            const pct = seen[s] ? bad[s] / seen[s] * 100 : null;
+            const cls = pct == null ? '' : (pct < 2 ? '' : (pct < 10 ? 'sl-warn' : 'sl-bad'));
+            return '<div class="sl-bar"><span>' + name + '</span><div class="sl-bar-track"><div class="sl-bar-fill ' + cls + '" style="width:' +
+                (pct == null ? 0 : Math.max(pct, 1)) + '%"></div></div><span>' + (pct == null ? DASH : pct.toFixed(1) + '%') + '</span></div>';
+        }).join(''));
+        $card.show();
+    }
+
+    function renderAlignment(a) {
+        if (!a) { return; }
+        const sgn = v => v == null ? null : (v > 0 ? '+' : '') + v + DEG;
+        const rows = [
+            ['Pointing (az / el)', a.azimuth_deg != null ? a.azimuth_deg + DEG + ' / ' + a.elevation_deg + DEG : null],
+            ['Target (az / el)', a.desired_azimuth_deg != null ? a.desired_azimuth_deg + DEG + ' / ' + a.desired_elevation_deg + DEG : 'not reported'],
+            ['Error (az / el)', a.azimuth_error_deg != null ? sgn(a.azimuth_error_deg) + ' / ' + sgn(a.elevation_error_deg) : null],
+            ['Tilt', a.tilt_deg != null ? a.tilt_deg + DEG : null],
+            ['Attitude estimate', a.attitude_state ? a.attitude_state.replace(/^FILTER_/, '').toLowerCase() +
+                (a.attitude_uncertainty_deg != null ? ' (±' + a.attitude_uncertainty_deg + DEG + ')' : '') : null],
+            ['Actuators', a.actuator_state ? a.actuator_state.replace(/^ACTUATOR_STATE_/, '').toLowerCase().replace(/_/g, ' ') : null],
+        ];
+        $('#sl-align-details').html(kv(rows));
+        const q = {good: ['sl-ok', 'Well aligned'], fair: ['sl-warn', 'Slightly off'], poor: ['sl-bad', 'Misaligned']}[a.quality];
+        $('#sl-align-chip').attr('class', 'sl-chip ' + (q ? q[0] : '')).text(q ? q[1] : '').toggle(!!q);
+        drawDial(a);
+    }
+
+    function drawDial(a) {
+        const c = document.getElementById('sl-dial'); if (!c) { return; }
+        const size = 150, dpr = window.devicePixelRatio || 1;
+        c.width = size * dpr; c.height = size * dpr;
+        const g = c.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, size, size);
+        const fg = getComputedStyle(document.body).color || '#888', cx = size / 2, cy = size / 2, R = 56;
+        g.strokeStyle = 'rgba(128,128,128,.55)'; g.fillStyle = fg; g.lineWidth = 1;
+        g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+        g.font = 'bold 11px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(([t, deg]) => {
+            const r = deg * Math.PI / 180;
+            g.beginPath(); g.moveTo(cx + (R - 5) * Math.sin(r), cy - (R - 5) * Math.cos(r));
+            g.lineTo(cx + R * Math.sin(r), cy - R * Math.cos(r)); g.stroke();
+            g.fillText(t, cx + (R + 11) * Math.sin(r), cy - (R + 11) * Math.cos(r));
+        });
+        const arrow = (deg, color, dashed) => {
+            const r = deg * Math.PI / 180, x = cx + (R - 8) * Math.sin(r), y = cy - (R - 8) * Math.cos(r);
+            g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2.5; g.setLineDash(dashed ? [4, 3] : []);
+            g.beginPath(); g.moveTo(cx, cy); g.lineTo(x, y); g.stroke(); g.setLineDash([]);
+            g.beginPath(); g.arc(x, y, dashed ? 0 : 4, 0, Math.PI * 2); g.fill();
+        };
+        if (a.desired_azimuth_deg != null) { arrow(a.desired_azimuth_deg, '#9aa0a6', true); }
+        if (a.azimuth_deg != null) { arrow(a.azimuth_deg, '#2f7ed8', false); }
+        g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+    }
+
+    $('#sl-obsmap').on('mousemove', function (e) {
+        const d = lastObs, $tip = $('#sl-obs-tip'); if (!d) { return; }
+        const geo = obsGeometry(d), rect = this.getBoundingClientRect(), size = rect.width, R = size / 2 - 22;
+        const dx = e.clientX - rect.left - size / 2, dy = e.clientY - rect.top - size / 2;
+        if (Math.hypot(dx, dy) > R) { $tip.hide(); return; }
+        const col = Math.min(d.cols - 1, Math.floor((dx + R) / (2 * R) * d.cols)), row = Math.min(d.rows - 1, Math.floor((dy + R) / (2 * R) * d.rows));
+        const a = cellAngles(d, col, row, geo), v = d.snr[row * d.cols + col];
+        const state = v < 0 ? 'not observed yet' : (v < 0.5 ? 'obstructed' : 'clear');
+        $tip.text('elevation ' + (90 - a.theta).toFixed(0) + DEG + (geo.earth ? ', ' + SECTORS[Math.floor(((a.az + 22.5) % 360) / 45)] + ' ' + a.az.toFixed(0) + DEG : '') + ' · ' + state)
+            .css({left: Math.min(e.clientX - rect.left + 12, size - 190), top: e.clientY - rect.top + 12}).show();
+    }).on('mouseleave', function () { $('#sl-obs-tip').hide(); });
+    $(window).on('resize', drawObstruction);
+
     function loadObstruction() {
         ajaxGet('/api/starlink/dish/obstruction', {}, function (d) {
             if (!d || !d.ok) { $('#sl-obs-details').html('<dt>Error</dt><dd>' + esc(d && d.error) + '</dd>'); return; }
-            const c = document.getElementById('sl-obsmap');
-            c.width = d.cols; c.height = d.rows;
-            const g = c.getContext('2d'), img = g.createImageData(d.cols, d.rows);
+            lastObs = d;
             let seen = 0, bad = 0;
-            d.snr.forEach((v, i) => {
-                const p = i * 4;
-                if (v < 0) { img.data[p + 3] = 0; return; }
-                seen++; if (v < 0.5) { bad++; }
-                img.data[p] = Math.round(255 * (1 - v)); img.data[p + 1] = Math.round(200 * v); img.data[p + 2] = 40; img.data[p + 3] = 255;
-            });
-            g.putImageData(img, 0, 0);
+            d.snr.forEach(v => { if (v >= 0) { seen++; if (v < 0.5) { bad++; } } });
+            const geo = obsGeometry(d);
             const rows = [['Map size', d.cols + ' × ' + d.rows], ['Reference frame', d.frame],
-                ['Min elevation', d.min_elevation_deg + '°'], ['Observed cells', seen],
+                ['Min elevation', d.min_elevation_deg != null ? d.min_elevation_deg + DEG : null],
+                ['Observed cells', seen],
                 ['Obstructed cells', seen ? bad + ' (' + (bad / seen * 100).toFixed(1) + '%)' : null]];
             if (lastStatus) { rows.push(['Fraction obstructed (dish)', (lastStatus.obstruction.fraction_obstructed * 100).toFixed(2) + '%']); }
             $('#sl-obs-details').html(kv(rows));
+            drawObstruction();
+            renderSectors(d);
+            if (lastStatus) { renderAlignment(lastStatus.alignment); }
         });
     }
-    $('#sl-btn-obs').click(loadObstruction);
+    $('#sl-btn-obs').click(function () { loadStatus(); loadObstruction(); });
 
     // ------------------------------------------------------------- settings
     function loadSettings() {

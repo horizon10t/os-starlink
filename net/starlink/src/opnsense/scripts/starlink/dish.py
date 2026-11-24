@@ -218,6 +218,35 @@ def _r(value, digits=1):
     return None if value is None else round(value, digits)
 
 
+def _angle_diff(a, b):
+    """Signed difference a - b in degrees, wrapped to -180..180 (azimuth wraps at 360)."""
+    return (a - b + 180) % 360 - 180
+
+
+def alignment_info(st):
+    """Current vs desired dish pointing. The quality bands are this plugin's own heuristic, not SpaceX's."""
+    align = st.get('alignment_stats') or {}
+    az = align.get('boresight_azimuth_deg', st.get('boresight_azimuth_deg'))
+    el = align.get('boresight_elevation_deg', st.get('boresight_elevation_deg'))
+    d_az = align.get('desired_boresight_azimuth_deg')
+    d_el = align.get('desired_boresight_elevation_deg')
+    if d_az is None or d_el is None or (d_az == 0 and d_el == 0):
+        d_az = d_el = None   # the dish did not report a target (zero is the unset default)
+    az_err = _angle_diff(az, d_az) if az is not None and d_az is not None else None
+    el_err = el - d_el if el is not None and d_el is not None else None
+    worst = max(abs(az_err), abs(el_err)) if az_err is not None and el_err is not None else None
+    quality = None if worst is None else ('good' if worst <= 2 else ('fair' if worst <= 5 else 'poor'))
+    return {
+        'azimuth_deg': _r(az), 'elevation_deg': _r(el),
+        'desired_azimuth_deg': _r(d_az), 'desired_elevation_deg': _r(d_el),
+        'azimuth_error_deg': _r(az_err), 'elevation_error_deg': _r(el_err), 'quality': quality,
+        'tilt_deg': _r(align.get('tilt_angle_deg')),
+        'attitude_state': align.get('attitude_estimation_state'),
+        'attitude_uncertainty_deg': _r(align.get('attitude_uncertainty_deg'), 2),
+        'actuator_state': align.get('actuator_state'),
+    }
+
+
 def update_info(st):
     """Dish firmware update status. The dish downloads updates itself and installs them on reboot."""
     stats = st.get('software_update_stats') or {}
@@ -328,6 +357,7 @@ def cmd_status(cfg, dish, _args):
         'elevation_deg': _r(align.get('boresight_elevation_deg', st.get('boresight_elevation_deg'))),
         'software_update_state': st.get('software_update_state'),
         'update': update_info(st),
+        'alignment': alignment_info(st),
         'snow_melt_mode': config.get('snow_melt_mode', 'AUTO') if config else None,
         'sleep': sleep_info(config),
         'managed_schedule': {'enabled': cfg['managed'], 'start': cfg['start'], 'end': cfg['end']},

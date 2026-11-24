@@ -52,6 +52,11 @@ export default class StarlinkDish extends BaseTableWidget {
             [t.gps, gps],
             [t.pointing, `${d.azimuth_deg ?? '–'}° / ${d.elevation_deg ?? '–'}°`],
         ];
+        const a = d.alignment || {};
+        if (a.quality) {
+            const color = {good: 'success', fair: 'warning', poor: 'danger'}[a.quality];
+            rows.push([t.alignment, `<span class="text-${color}"><b>${t[a.quality]}</b></span> (${a.azimuth_error_deg}° / ${a.elevation_error_deg}°)`]);
+        }
         if (d.eth_speed_mbps) {
             rows.push([t.ethernet, `${d.eth_speed_mbps} Mbps`]);
         }

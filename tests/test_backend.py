@@ -99,6 +99,26 @@ class Models(unittest.TestCase):
             self.assertIn(feature, dish.FEATURES)
 
 
+class Alignment(unittest.TestCase):
+    def _st(self, az, el, d_az, d_el):
+        return {'alignment_stats': {'boresight_azimuth_deg': az, 'boresight_elevation_deg': el,
+                                    'desired_boresight_azimuth_deg': d_az, 'desired_boresight_elevation_deg': d_el}}
+
+    def test_azimuth_error_wraps_around_north(self):
+        a = dish.alignment_info(self._st(359.0, 70.0, 1.0, 70.0))
+        self.assertEqual(a['azimuth_error_deg'], -2.0)
+        self.assertEqual(a['quality'], 'good')
+
+    def test_quality_bands(self):
+        self.assertEqual(dish.alignment_info(self._st(100, 60, 100, 63))['quality'], 'fair')
+        self.assertEqual(dish.alignment_info(self._st(100, 60, 110, 60))['quality'], 'poor')
+
+    def test_unreported_target_gives_no_quality(self):
+        self.assertIsNone(dish.alignment_info(self._st(100, 60, None, None))['quality'])
+        self.assertIsNone(dish.alignment_info(self._st(100, 60, 0, 0))['quality'])   # zero = unset default
+        self.assertIsNone(dish.alignment_info({})['azimuth_deg'])
+
+
 class Updates(unittest.TestCase):
     def test_version_compare(self):
         self.assertGreater(dish.parse_version('1.0'), dish.parse_version('0.9'))
