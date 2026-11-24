@@ -13,7 +13,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install PHP and Node
         run: sudo apt-get update && sudo apt-get install -y php-cli nodejs
       - run: sh ci/check.sh
@@ -22,7 +22,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build package in FreeBSD VM
         uses: vmactions/freebsd-vm@v1
         with:
