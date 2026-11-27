@@ -44,6 +44,12 @@
         <help>How often the status page refreshes. 0 disables auto refresh.</help>
     </field>
     <field>
+        <id>starlink.general.show_icon</id>
+        <label>Show dish icon</label>
+        <type>checkbox</type>
+        <help>Show the dish icon at the top of the status page. Its signal colour follows the dish state.</help>
+    </field>
+    <field>
         <id>starlink.general.update_check</id>
         <label>Check for plugin updates</label>
         <type>checkbox</type>

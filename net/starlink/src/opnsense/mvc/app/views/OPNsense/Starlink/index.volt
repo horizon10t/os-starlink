@@ -40,6 +40,18 @@
     .sl-head .sl-spacer { flex: 1 1 auto; }
     .sl-updated { font-size: 12px; opacity: .6; }
 
+    /* dish icon: signal colour follows the state, and only pulses while connected */
+    #sl-dishicon { display: none; width: 48px; height: 48px; flex: 0 0 auto; --sl-sig: #9aa0a6; }
+    #sl-dishicon.sl-ok { --sl-sig: var(--sl-ok); }
+    #sl-dishicon.sl-info { --sl-sig: var(--sl-info); }
+    #sl-dishicon.sl-warn { --sl-sig: var(--sl-warn); }
+    #sl-dishicon.sl-bad { --sl-sig: var(--sl-bad); }
+    .sl-wave { fill: none; stroke: var(--sl-sig); stroke-width: 3; stroke-linecap: round; opacity: .55; }
+    #sl-dishicon.sl-ok .sl-wave { animation: sl-pulse 2.4s ease-in-out infinite; }
+    #sl-dishicon.sl-ok .sl-wave + .sl-wave { animation-delay: .4s; }
+    @keyframes sl-pulse { 0%, 100% { opacity: .2; } 45% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { #sl-dishicon .sl-wave { animation: none !important; } }
+
     /* KPI tiles */
     .sl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
     .sl-tile { position: relative; border: 1px solid var(--sl-line); border-radius: 6px; padding: 12px 14px 10px 17px; overflow: hidden; }
@@ -53,6 +65,13 @@
     .sl-tile .sl-value { font-size: 26px; font-weight: 600; line-height: 1.25; }
     .sl-tile .sl-unit { font-size: 13px; font-weight: 400; opacity: .7; margin-left: 3px; }
     .sl-tile .sl-sub { font-size: 12px; opacity: .7; min-height: 16px; }
+
+    /* satellites overhead */
+    .sl-sat { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+    .sl-sat-map { flex: 0 0 auto; }
+    .sl-sat-list { flex: 1 1 320px; min-width: 0; }
+    .sl-sat-list table { margin-bottom: 8px; }
+    .sl-sat-list tr.sl-near td { color: var(--sl-ok); font-weight: 600; }
 
     /* cards */
     .sl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
@@ -120,6 +139,14 @@
         <div id="sl-message" class="alert alert-info sl-msg" style="display:none"></div>
 
         <div class="sl-head">
+            <svg id="sl-dishicon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+                <path d="M8 24 C8 42 24 52 42 46 Z" fill="currentColor"/>
+                <path d="M24 44 L16 58 H34 L30 46 Z" fill="currentColor"/>
+                <path d="M26 35 L38 23" stroke="currentColor" stroke-width="3"/>
+                <circle cx="40" cy="21" r="4" style="fill: var(--sl-sig)"/>
+                <path class="sl-wave" d="M40 12 Q49 13 49 22"/>
+                <path class="sl-wave" d="M40 5 Q57 6 56 23"/>
+            </svg>
             <span class="sl-pill" id="sl-pill"><span class="sl-dot"></span><span id="sl-state">&hellip;</span></span>
             <span class="sl-meta" id="sl-headmeta"></span>
             <span class="sl-spacer"></span>
@@ -132,6 +159,26 @@
             <div class="sl-tile" id="sl-t-down"><div class="sl-label"><i class="fa fa-arrow-down"></i>{{ lang._('Download') }}</div><div class="sl-value" id="sl-down">&ndash;</div><div class="sl-sub">{{ lang._('current') }}</div></div>
             <div class="sl-tile" id="sl-t-up"><div class="sl-label"><i class="fa fa-arrow-up"></i>{{ lang._('Upload') }}</div><div class="sl-value" id="sl-up">&ndash;</div><div class="sl-sub">{{ lang._('current') }}</div></div>
             <div class="sl-tile" id="sl-t-obs"><div class="sl-label"><i class="fa fa-eye-slash"></i>{{ lang._('Obstructed') }}</div><div class="sl-value" id="sl-obs">&ndash;</div><div class="sl-sub" id="sl-obs-sub"></div></div>
+        </div>
+
+        <div class="sl-card">
+            <div class="sl-card-title"><i class="fa fa-globe"></i>{{ lang._('Satellites overhead') }}
+                <a href="/ui/starlink/index/live" id="sl-sat-livelink" class="pull-right" style="display:none">{{ lang._('Open live map') }}</a></div>
+            <div class="sl-card-body">
+                <p class="sl-empty" id="sl-sat-msg" style="margin:0">&hellip;</p>
+                <div class="sl-sat" id="sl-sat-body" style="display:none">
+                    <div class="sl-sat-map"><canvas id="sl-skymap"></canvas></div>
+                    <div class="sl-sat-list">
+                        <p><b id="sl-sat-count"></b></p>
+                        <table class="table table-condensed">
+                            <thead><tr><th>{{ lang._('Satellite') }}</th><th>{{ lang._('Azimuth') }}</th><th>{{ lang._('Elevation') }}</th><th>{{ lang._('Distance') }}</th></tr></thead>
+                            <tbody id="sl-sat-rows"></tbody>
+                        </table>
+                        <p class="sl-note">{{ lang._('The blue ring is where the dish points. The green satellite is the one nearest to it. The dish does not report which satellite it is using, so this is not a confirmed connection.') }}</p>
+                        <p class="sl-note" id="sl-sat-age"></p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="sl-grid">
@@ -291,12 +338,15 @@
     <div id="tab-settings" class="tab-pane fade">
         {{ partial("layout_partials/base_form", ['fields': generalForm, 'id': 'frm_general']) }}
         {{ partial("layout_partials/base_form", ['fields': scheduleForm, 'id': 'frm_schedule']) }}
+        {{ partial("layout_partials/base_form", ['fields': satellitesForm, 'id': 'frm_satellites']) }}
         <div class="col-md-12" style="padding:10px 15px 20px">
             <button class="btn btn-primary" id="sl-btn-save"><b>{{ lang._('Save') }}</b> <i id="sl-save-progress" class=""></i></button>
         </div>
     </div>
 </div>
 
+<script src="/ui/js/starlink/satellite.min.js"></script>
+<script src="/ui/js/starlink/skymap.js?v=1.0.3"></script>
 <script>
 $(function () {
     const T = {
@@ -380,6 +430,8 @@ $(function () {
         lastStatus = d;
         $('#sl-pill').removeClass('sl-ok sl-info sl-bad').addClass(stateClass(d.state));
         $('#sl-state').text(d.state.replace(/_/g, ' '));
+        const blocked = d.state === 'CONNECTED' && d.obstruction.currently_obstructed;
+        $('#sl-dishicon').removeClass('sl-ok sl-info sl-warn sl-bad').addClass(blocked ? 'sl-warn' : stateClass(d.state));
         const model = d.model ? d.model.name : '';
         $('#sl-headmeta').text([model, 'up ' + fmtUptime(d.uptime_s), d.transport ? 'via ' + d.transport : ''].filter(Boolean).join('  ·  '));
         $('#sl-updated').text('updated ' + new Date().toLocaleTimeString());
@@ -441,6 +493,7 @@ $(function () {
                 showError((data && data.error) || 'No response from backend');
                 $('#sl-pill').removeClass('sl-ok sl-info').addClass('sl-bad');
                 $('#sl-state').text('UNREACHABLE');
+                $('#sl-dishicon').removeClass('sl-ok sl-info sl-warn').addClass('sl-bad');
             }
         });
     }
@@ -741,11 +794,50 @@ $(function () {
     }
     $('#sl-btn-obs').click(function () { loadStatus(); loadObstruction(); });
 
+    // ------------------------------------------------------------ satellites
+    let sky = null, skyMap = null, skyTick = 0, skyTimer = null, skyData = null;
+    function satMessage(text) { $('#sl-sat-msg').text(text).show(); $('#sl-sat-body, #sl-sat-livelink').hide(); }
+    function drawSatellites() {
+        if (!sky || document.hidden || !$('#tab-status').hasClass('active')) { return; }
+        const now = new Date(), minEl = (skyMap && skyMap.min_elevation_deg) || 25;
+        if (skyTick++ % 10 === 0) { sky.refresh(now, minEl); }
+        const al = lastStatus && lastStatus.alignment;
+        const bore = al && al.azimuth_deg != null && al.elevation_deg != null ? {az: al.azimuth_deg, el: al.elevation_deg} : null;
+        const list = StarlinkSky.rank(sky.overhead(now, minEl), bore);
+        StarlinkSky.drawSky(document.getElementById('sl-skymap'), {
+            size: Math.min(340, Math.max(240, $('#sl-sat-body').width() || 340)), list: list, boresight: bore,
+            thetaMax: (skyMap && skyMap.max_theta_deg) || 90 - minEl, obstruction: skyMap,
+        });
+        $('#sl-sat-count').text(list.length + ' satellites above ' + Math.round(minEl) + '°');
+        $('#sl-sat-rows').html(list.slice(0, 8).map((o, i) =>
+            '<tr' + (bore && i === 0 ? ' class="sl-near"' : '') + '><td>' + esc(o.name) + (bore && i === 0 ? ' (nearest to pointing)' : '') +
+            '</td><td>' + o.az.toFixed(0) + '°</td><td>' + o.el.toFixed(0) + '°</td><td>' + Math.round(o.range) + ' km</td></tr>').join(''));
+        const hours = (Date.now() / 1000 - skyData.fetched) / 3600;
+        $('#sl-sat-age').text('Orbit data from CelesTrak, downloaded ' + (hours < 1 ? 'less than an hour' : Math.round(hours) + ' h') + ' ago.' +
+            (skyData.warning ? ' ' + skyData.warning : ''));
+    }
+    function loadSatellites() {
+        satMessage('Loading satellite data…');
+        ajaxGet('/api/starlink/dish/satellites', {}, function (d) {
+            if (skyTimer) { clearInterval(skyTimer); skyTimer = null; }
+            sky = null;
+            if (!d || !d.ok) { satMessage((d && d.error) || 'No satellite data'); return; }
+            if (!d.enabled) { satMessage('Satellite tracking is off. Turn it on under Settings and enter your location.'); return; }
+            if (!d.configured) { satMessage('Enter your latitude and longitude under Settings to see the satellites overhead.'); return; }
+            skyData = d; sky = StarlinkSky.create(d); skyTick = 0;
+            $('#sl-sat-msg').hide(); $('#sl-sat-body, #sl-sat-livelink').show();
+            drawSatellites();
+            skyTimer = setInterval(drawSatellites, 1000);
+            ajaxGet('/api/starlink/dish/obstruction', {}, function (m) { if (m && m.ok) { skyMap = m; skyTick = 0; } });
+        });
+    }
+
     // ------------------------------------------------------------- settings
     function loadSettings() {
-        return mapDataToFormUI({'frm_general': '/api/starlink/settings/get', 'frm_schedule': '/api/starlink/settings/get'}).done(function (data) {
+        return mapDataToFormUI({'frm_general': '/api/starlink/settings/get', 'frm_schedule': '/api/starlink/settings/get', 'frm_satellites': '/api/starlink/settings/get'}).done(function (data) {
             $('.selectpicker').selectpicker('refresh');
             const general = (((data.frm_general || {}).starlink || {}).general || {});
+            $('#sl-dishicon').toggle(general.show_icon !== '0');
             if (general.update_check === '1' && !autoChecked) { autoChecked = true; checkPlugin(); }
             const sec = parseInt(general.refresh, 10);
             if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
@@ -755,16 +847,19 @@ $(function () {
         });
     }
     $('#sl-btn-save').click(function () {
+        const done = function () { $('#sl-save-progress').removeClass('fa fa-spinner fa-pulse'); };
         $('#sl-save-progress').addClass('fa fa-spinner fa-pulse');
         saveFormToEndpoint('/api/starlink/settings/set', 'frm_general', function () {
             saveFormToEndpoint('/api/starlink/settings/set', 'frm_schedule', function () {
-                ajaxCall('/api/starlink/dish/resync', {}, function (r) {
-                    $('#sl-save-progress').removeClass('fa fa-spinner fa-pulse');
-                    if (r && !r.ok) { showError(r.error); }
-                    loadSettings(); loadStatus();
-                });
-            }, true, function () { $('#sl-save-progress').removeClass('fa fa-spinner fa-pulse'); });
-        }, true, function () { $('#sl-save-progress').removeClass('fa fa-spinner fa-pulse'); });
+                saveFormToEndpoint('/api/starlink/settings/set', 'frm_satellites', function () {
+                    ajaxCall('/api/starlink/dish/resync', {}, function (r) {
+                        done();
+                        if (r && !r.ok) { showError(r.error); }
+                        loadSettings(); loadStatus(); loadSatellites();
+                    });
+                }, true, done);
+            }, true, done);
+        }, true, done);
     });
 
     // ------------------------------------------------------------------ tabs
@@ -781,5 +876,7 @@ $(function () {
 
     loadSettings();
     loadStatus();
+    loadSatellites();
+    setInterval(function () { if (sky && !document.hidden) { loadSatellites(); } }, 3 * 3600 * 1000);
 });
 </script>

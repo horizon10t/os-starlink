@@ -99,6 +99,69 @@ class Models(unittest.TestCase):
             self.assertIn(feature, dish.FEATURES)
 
 
+class Satellites(unittest.TestCase):
+    TLE = ('EXAMPLE-1\n'
+           '1 90001U 26001A   26330.50000000  .00000000  00000-0  00000-0 0  9990\n'
+           '2 90001  53.0000 100.0000 0001000  90.0000 270.0000 15.06000000    10\n')
+
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.TemporaryDirectory()
+        self.orig = (dish.TLE_FILE, dish.fetch_tle)
+        dish.TLE_FILE = os.path.join(self.dir.name, 'starlink.tle')
+        self.calls = 0
+        self.reply = self.TLE
+
+        def fake():
+            self.calls += 1
+            if isinstance(self.reply, Exception):
+                raise self.reply
+            return self.reply
+        dish.fetch_tle = fake
+
+    def tearDown(self):
+        dish.TLE_FILE, dish.fetch_tle = self.orig
+        self.dir.cleanup()
+
+    def test_off_by_default_and_needs_location(self):
+        self.assertEqual(dish.cmd_satellites(dict(dish.DEFAULTS), None, []), {'enabled': False})
+        out = dish.cmd_satellites({'sat_enabled': '1'}, None, [])
+        self.assertFalse(out['configured'])
+        self.assertEqual(self.calls, 0)   # nothing is downloaded until it is fully set up
+
+    def test_rejects_bad_location(self):
+        with self.assertRaises(sc.DishError):
+            dish.cmd_satellites({'sat_enabled': '1', 'latitude': '95', 'longitude': '0'}, None, [])
+
+    def test_parse_skips_junk(self):
+        sats = dish.parse_tle('garbage\n' + self.TLE + 'trailing\n')
+        self.assertEqual([s[0] for s in sats], ['EXAMPLE-1'])
+        self.assertEqual(dish.parse_tle('<html>busy</html>'), [])
+
+    def test_downloads_once_then_uses_the_cache(self):
+        self.assertEqual(len(dish.orbit_data(1000000)[0]), 1)
+        dish.orbit_data(1000000 + 3600)
+        self.assertEqual(self.calls, 1)
+        dish.orbit_data(1000000 + dish.TLE_MAX_AGE + 1)
+        self.assertEqual(self.calls, 2)
+
+    def test_failed_refresh_keeps_old_data_and_backs_off(self):
+        dish.orbit_data(1000000)
+        self.reply = OSError('offline')
+        later = 1000000 + dish.TLE_MAX_AGE + 1
+        sats, fetched, error = dish.orbit_data(later)
+        self.assertEqual((len(sats), fetched), (1, 1000000))
+        self.assertIn('offline', error)
+        dish.orbit_data(later + 60)
+        self.assertEqual(self.calls, 2)   # no hammering of the server after a failure
+
+    def test_bad_reply_is_not_cached(self):
+        self.reply = 'rate limited'
+        with self.assertRaises(sc.DishError):
+            dish.orbit_data(1000000)
+        self.assertFalse(os.path.exists(dish.TLE_FILE))
+
+
 class Alignment(unittest.TestCase):
     def _st(self, az, el, d_az, d_el):
         return {'alignment_stats': {'boresight_azimuth_deg': az, 'boresight_elevation_deg': el,

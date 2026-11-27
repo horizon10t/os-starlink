@@ -34,6 +34,12 @@ class IndexController extends \OPNsense\Base\IndexController
     {
         $this->view->generalForm = $this->getForm('general');
         $this->view->scheduleForm = $this->getForm('schedule');
+        $this->view->satellitesForm = $this->getForm('satellites');
         $this->view->pick('OPNsense/Starlink/index');
+    }
+
+    public function liveAction()
+    {
+        $this->view->pick('OPNsense/Starlink/live');
     }
 }

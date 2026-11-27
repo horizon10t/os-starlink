@@ -50,6 +50,10 @@
                 <Default>0</Default>
                 <Required>Y</Required>
             </update_check>
+            <show_icon type="BooleanField">
+                <Default>1</Default>
+                <Required>Y</Required>
+            </show_icon>
             <refresh type="IntegerField">
                 <Default>10</Default>
                 <MinimumValue>0</MinimumValue>
@@ -57,6 +61,20 @@
                 <Required>Y</Required>
             </refresh>
         </general>
+        <satellites>
+            <sat_enabled type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </sat_enabled>
+            <latitude type="TextField">
+                <Mask>/^-?(90(\.0+)?|[1-8]?\d(\.\d+)?)$/</Mask>
+                <ValidationMessage>Latitude must be a number from -90 to 90.</ValidationMessage>
+            </latitude>
+            <longitude type="TextField">
+                <Mask>/^-?(180(\.0+)?|(1[0-7]\d|[1-9]?\d)(\.\d+)?)$/</Mask>
+                <ValidationMessage>Longitude must be a number from -180 to 180.</ValidationMessage>
+            </longitude>
+        </satellites>
         <schedule>
             <managed type="BooleanField">
                 <Default>0</Default>

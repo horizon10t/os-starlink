@@ -19,6 +19,8 @@ An OPNsense plugin to monitor and control a SpaceX Starlink dish from the web UI
 - **Dish model:** detected from the dish, or chosen in Settings. Controls a model does not have are hidden.
 - **History:** latency, loss, throughput and power draw for up to 12 hours, plus outages.
 - **Obstruction map** with an alignment readout, and **dashboard widgets**.
+- **Satellites overhead** (optional): a sky map on the status page and a live 3D globe of your area, calculated
+  from public CelesTrak orbit data and your location.
 - **No extra packages:** it talks to the dish's local gRPC API using only the Python that
   ships with OPNsense.
 

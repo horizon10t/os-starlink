@@ -104,7 +104,7 @@ def load_config():
         root = ET.parse(CONFIG_XML).getroot()
         node = root.find('./OPNsense/starlink')
         if node is not None:
-            for section in ('general', 'schedule'):
+            for section in ('general', 'schedule', 'satellites'):
                 sec = node.find(section)
                 if sec is None:
                     continue
@@ -594,7 +594,98 @@ def cmd_plugin_update(cfg, dish, args):
             'started': True}
 
 
+# --------------------------------------------------------------------------
+# satellite tracking (opt in): public orbit elements from CelesTrak, cached on the firewall
+# --------------------------------------------------------------------------
+
+TLE_URL = os.environ.get('STARLINK_TLE_URL',
+                         'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle')
+TLE_FILE = os.path.join(os.path.dirname(STATE_FILE), 'starlink.tle')
+TLE_MAX_AGE = 6 * 3600       # refresh orbit data after this long
+TLE_RETRY = 2 * 3600         # with usable data, wait this long between download attempts
+TLE_RETRY_EMPTY = 600        # with no data at all, retry sooner
+
+
+def parse_tle(text):
+    """Three-line element sets -> [[name, line1, line2], ...]; anything else is skipped."""
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    sats, i = [], 0
+    while i + 2 < len(lines):
+        name, first, second = lines[i:i + 3]
+        if first.startswith('1 ') and second.startswith('2 ') and len(first) >= 68 and len(second) >= 68:
+            sats.append([name.strip(), first, second])
+            i += 3
+        else:
+            i += 1
+    return sats
+
+
+def _mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+def fetch_tle():
+    request = urllib.request.Request(TLE_URL, headers={'User-Agent': 'os-starlink'})
+    with urllib.request.urlopen(request, timeout=30) as resp:
+        return resp.read(8 * 1024 * 1024).decode('ascii', 'replace')
+
+
+def orbit_data(now=None):
+    """Return (satellites, download time, error text or None), downloading only when due."""
+    now = time.time() if now is None else now
+    fetched, error = _mtime(TLE_FILE), None
+    if fetched is None or now - fetched > TLE_MAX_AGE:
+        marker = TLE_FILE + '.attempt'
+        tried = _mtime(marker)
+        if tried is None or now - tried >= (TLE_RETRY if fetched else TLE_RETRY_EMPTY):
+            os.makedirs(os.path.dirname(TLE_FILE), exist_ok=True)
+            with open(marker, 'w'):
+                pass
+            os.utime(marker, (now, now))
+            try:
+                text = fetch_tle()
+                if not parse_tle(text):
+                    raise ValueError('the server sent no orbit data')
+                with open(TLE_FILE + '.tmp', 'w') as fh:
+                    fh.write(text)
+                os.replace(TLE_FILE + '.tmp', TLE_FILE)
+                os.utime(TLE_FILE, (now, now))
+                fetched = now
+            except (OSError, ValueError) as exc:
+                error = 'could not download orbit data: %s' % exc
+    if fetched is None:
+        raise DishError(error or 'no orbit data yet, trying again in a few minutes')
+    with open(TLE_FILE) as fh:
+        return parse_tle(fh.read()), fetched, error
+
+
+def parse_coordinate(value, limit, label):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise DishError('invalid %s' % label)
+    if not -limit <= number <= limit:
+        raise DishError('%s out of range' % label)
+    return number
+
+
+def cmd_satellites(cfg, _dish, _args):
+    if cfg.get('sat_enabled') != '1':
+        return {'enabled': False}
+    if not cfg.get('latitude') or not cfg.get('longitude'):
+        return {'enabled': True, 'configured': False}
+    location = {'lat': parse_coordinate(cfg['latitude'], 90, 'latitude'),
+                'lon': parse_coordinate(cfg['longitude'], 180, 'longitude')}
+    sats, fetched, error = orbit_data()
+    return {'enabled': True, 'configured': True, 'location': location, 'fetched': int(fetched),
+            'age_s': max(0, int(time.time() - fetched)), 'warning': error, 'satellites': sats}
+
+
 COMMANDS = {
+    'satellites': cmd_satellites,
     'plugin_check': cmd_plugin_check, 'plugin_update': cmd_plugin_update,
     'status': cmd_status, 'history': cmd_history, 'obstruction': cmd_obstruction, 'info': cmd_info,
     'sleep': cmd_sleep, 'wake': cmd_wake, 'resume': cmd_resume, 'resync': cmd_resync,

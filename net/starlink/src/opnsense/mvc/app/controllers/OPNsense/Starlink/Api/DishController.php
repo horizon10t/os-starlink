@@ -126,6 +126,12 @@ class DishController extends ApiControllerBase
         return $this->requirePost() ?? $this->run('reboot');
     }
 
+    /* Orbit data for the satellite maps; positions are calculated in the browser. */
+    public function satellitesAction()
+    {
+        return $this->run('satellites');
+    }
+
     /* Plugin self-update: the check only contacts GitHub when called, the update needs POST. */
     public function pluginCheckAction()
     {

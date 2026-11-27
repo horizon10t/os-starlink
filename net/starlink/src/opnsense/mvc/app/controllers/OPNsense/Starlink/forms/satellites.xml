@@ -1,0 +1,20 @@
+<form>
+    <field>
+        <id>starlink.satellites.sat_enabled</id>
+        <label>Satellite tracking</label>
+        <type>checkbox</type>
+        <help>Show the satellites overhead. When enabled, this firewall downloads public Starlink orbit data from celestrak.org, at most a few times a day. Off by default.</help>
+    </field>
+    <field>
+        <id>starlink.satellites.latitude</id>
+        <label>Latitude</label>
+        <type>text</type>
+        <help>Decimal degrees, south is negative, for example -41.29. About two decimals is plenty. Stored only in this firewall's configuration.</help>
+    </field>
+    <field>
+        <id>starlink.satellites.longitude</id>
+        <label>Longitude</label>
+        <type>text</type>
+        <help>Decimal degrees, west is negative, for example 174.78.</help>
+    </field>
+</form>

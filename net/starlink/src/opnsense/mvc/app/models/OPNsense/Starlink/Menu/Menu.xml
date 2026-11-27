@@ -2,6 +2,7 @@
     <Services>
         <Starlink VisibleName="Starlink" cssClass="fa fa-satellite-dish fa-fw">
             <Status order="10" VisibleName="Status" url="/ui/starlink"/>
+            <Live order="20" VisibleName="Live map" url="/ui/starlink/index/live"/>
         </Starlink>
     </Services>
 </menu>
